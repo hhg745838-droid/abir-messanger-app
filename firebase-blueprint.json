@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with display name, unique username, and status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 30, "pattern": "^[a-z0-9_]{3,30}$" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 1000 },
+        "email": { "type": "string", "format": "email", "maxLength": 255 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "online": { "type": "boolean" },
+        "bio": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["uid", "username", "displayName", "email"]
+    },
+    "Username": {
+      "title": "Username",
+      "description": "Lookup table for unique username reservation",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 30, "pattern": "^[a-z0-9_]{3,30}$" },
+        "reservedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Direct 1-on-1 private conversation between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 256 },
+        "participants": { "type": "array", "description": "Array of 2 user UIDs" },
+        "participantDetails": { "type": "object", "description": "Map of user profile snapshot keyed by UID" },
+        "lastMessage": { "type": "object", "description": "Snippet of last message sent" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "unreadCount": { "type": "object", "description": "Unread count per UID" },
+        "typing": { "type": "object", "description": "UID to boolean typing status" }
+      },
+      "required": ["id", "participants"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message inside a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 256 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderPhoto": { "type": "string", "maxLength": 1000 },
+        "text": { "type": "string", "maxLength": 5000 },
+        "type": { "type": "string", "enum": ["text", "image", "file"] },
+        "mediaUrl": { "type": "string", "maxLength": 2000 },
+        "fileName": { "type": "string", "maxLength": 255 },
+        "fileSize": { "type": "number" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "conversationId", "senderId", "type", "createdAt"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "WebRTC voice or video call signaling session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "callerId": { "type": "string", "maxLength": 128 },
+        "callerName": { "type": "string", "maxLength": 100 },
+        "callerPhoto": { "type": "string", "maxLength": 1000 },
+        "receiverId": { "type": "string", "maxLength": 128 },
+        "callType": { "type": "string", "enum": ["audio", "video"] },
+        "status": { "type": "string", "enum": ["calling", "accepted", "rejected", "ended", "missed"] },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "callerId", "receiverId", "callType", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "#/entities/User",
+      "description": "User profile records"
+    },
+    "/usernames/{username}": {
+      "schema": "#/entities/Username",
+      "description": "Global unique username claims"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "#/entities/Conversation",
+      "description": "Private direct conversations"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "#/entities/Message",
+      "description": "Subcollection of messages inside a conversation"
+    },
+    "/calls/{callId}": {
+      "schema": "#/entities/CallSession",
+      "description": "WebRTC call signaling documents"
+    },
+    "/calls/{callId}/callerCandidates/{candidateId}": {
+      "schema": "object",
+      "description": "ICE candidates from caller"
+    },
+    "/calls/{callId}/receiverCandidates/{candidateId}": {
+      "schema": "object",
+      "description": "ICE candidates from receiver"
+    }
+  }
+}

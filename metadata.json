@@ -1,0 +1,9 @@
+{
+  "name": "MyMessenger",
+  "description": "Production-ready full-stack real-time messaging, audio and video calling app powered by Firebase and WebRTC.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
