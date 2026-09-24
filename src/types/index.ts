@@ -4,6 +4,7 @@ export interface UserProfile {
   displayName: string;
   photoURL: string;
   email: string;
+  phoneNumber?: string;
   createdAt?: any;
   lastSeen?: any;
   online?: boolean;

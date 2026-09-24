@@ -6,6 +6,9 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
 } from 'firebase/auth';
 import {
   doc,
@@ -35,12 +38,29 @@ interface AuthContextType {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   loginWithGoogle: (forceRedirect?: boolean) => Promise<void>;
+  loginWithNumberOrEmail: (numberOrEmail: string, password: string) => Promise<void>;
+  signupWithNumberOrEmail: (numberOrEmail: string, password: string, name?: string) => Promise<void>;
   registerUsername: (username: string, bio?: string) => Promise<{ success: boolean; error?: string }>;
   updateProfileDetails: (updates: Partial<UserProfile>) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// Helper to normalize phone number or email to a valid Firebase email format
+export const normalizeNumberOrEmail = (input: string): { email: string; isPhone: boolean; raw: string } => {
+  const trimmed = input.trim();
+  if (trimmed.includes('@')) {
+    return { email: trimmed.toLowerCase(), isPhone: false, raw: trimmed };
+  }
+  // Strip non-digit characters except leading plus
+  const digits = trimmed.replace(/\D/g, '');
+  return {
+    email: `phone_${digits}@mymessenger.app`,
+    isPhone: true,
+    raw: trimmed,
+  };
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -67,8 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Helper to ensure user document users/{FirebaseAuthUID} exists with all required fields:
-  // uid, email, displayName, photoURL, username, createdAt, lastSeen, online, status
+  // Helper to ensure user document users/{FirebaseAuthUID} exists
   const syncUserProfileDoc = useCallback(async (user: FirebaseUser) => {
     const userDocRef = doc(db, 'users', user.uid);
     try {
@@ -77,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initialProfile: UserProfile = {
           uid: user.uid,
           email: user.email || '',
+          phoneNumber: user.phoneNumber || '',
           displayName: user.displayName || 'User',
           photoURL: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`,
           username: '', // Missing username triggers username setup modal
@@ -153,7 +173,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUserProfile(data);
             setNeedsUsername(!data.username || data.username.trim() === '');
           } else {
-            // Initial document doesn't exist yet, create it
             syncUserProfileDoc(user);
           }
           setLoading(false);
@@ -235,15 +254,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       const code = error?.code;
-      // If popup was blocked or unsupported in the current browser/webview, fallback to redirect
+      // If popup was blocked or unsupported, fallback to redirect
       if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
         console.warn('Popup blocked, falling back to signInWithRedirect...', error);
         await signInWithRedirect(auth, googleProvider);
         return;
       }
-      // Re-throw so caller can display exact error code & message
       throw error;
     }
+  };
+
+  // Sign In with Number or Email + Password
+  const loginWithNumberOrEmail = async (numberOrEmail: string, password: string) => {
+    const { email } = normalizeNumberOrEmail(numberOrEmail);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    if (userCredential.user) {
+      await syncUserProfileDoc(userCredential.user);
+    }
+  };
+
+  // Sign Up with Number or Email + Password
+  const signupWithNumberOrEmail = async (numberOrEmail: string, password: string, name = '') => {
+    const { email, isPhone, raw } = normalizeNumberOrEmail(numberOrEmail);
+    if (isPhone && raw.replace(/\D/g, '').length < 6) {
+      throw new Error('Please enter a valid phone number (at least 6 digits).');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    const displayName = name.trim() || (isPhone ? `User ${raw}` : email.split('@')[0]);
+
+    await updateProfile(user, {
+      displayName,
+      photoURL: `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`,
+    }).catch(() => {});
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const initialProfile: UserProfile = {
+      uid: user.uid,
+      email: isPhone ? '' : email,
+      phoneNumber: isPhone ? raw : '',
+      displayName,
+      photoURL: `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`,
+      username: '', // prompts username setup
+      createdAt: serverTimestamp(),
+      lastSeen: serverTimestamp(),
+      online: true,
+      status: 'active',
+      bio: '',
+    };
+    await setDoc(userDocRef, initialProfile, { merge: true });
+    setUserProfile(initialProfile);
+    setNeedsUsername(true);
   };
 
   const registerUsername = async (rawUsername: string, bio = '') => {
@@ -259,7 +324,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // Check if username is already claimed
       const usernameDocRef = doc(db, 'usernames', username);
       const usernameSnap = await getDoc(usernameDocRef);
 
@@ -270,7 +334,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Batch write username reservation & user profile
       const batch = writeBatch(db);
       batch.set(usernameDocRef, {
         uid: currentUser.uid,
@@ -285,6 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         displayName: currentUser.displayName || username,
         photoURL: currentUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
         email: currentUser.email || '',
+        phoneNumber: userProfile?.phoneNumber || '',
         createdAt: serverTimestamp(),
         lastSeen: serverTimestamp(),
         online: true,
@@ -338,6 +402,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         theme,
         toggleTheme,
         loginWithGoogle,
+        loginWithNumberOrEmail,
+        signupWithNumberOrEmail,
         registerUsername,
         updateProfileDetails,
         logout,
