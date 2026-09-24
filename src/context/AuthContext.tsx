@@ -230,11 +230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [syncUserProfileDoc]);
 
-  // Google Sign-In: uses signInWithPopup where supported and signInWithRedirect for mobile/unreliable environments
+  // Google Sign-In: supports both signInWithPopup and signInWithRedirect fallback
   const loginWithGoogle = async (forceRedirect = false) => {
-    const shouldUseRedirect = forceRedirect || isMobileOrUnreliablePopup();
-
-    if (shouldUseRedirect) {
+    if (forceRedirect) {
       await signInWithRedirect(auth, googleProvider);
       return;
     }
@@ -246,13 +244,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       const code = error?.code;
-      // If popup was blocked or unsupported, automatically fallback to signInWithRedirect
+      // If popup was blocked or unsupported in the current browser/webview, fallback to redirect
       if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
-        console.warn('Popup blocked or cancelled, falling back to signInWithRedirect...');
+        console.warn('Popup blocked, falling back to signInWithRedirect...', error);
         await signInWithRedirect(auth, googleProvider);
         return;
       }
-      // Re-throw so LoginScreen can present user-friendly guidance
+      // Re-throw so caller can display exact error code & message
       throw error;
     }
   };
