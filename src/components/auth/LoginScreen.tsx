@@ -10,7 +10,6 @@ import {
   HelpCircle,
   AlertCircle,
   Loader2,
-  ExternalLink,
   ArrowRight,
   Terminal,
 } from 'lucide-react';
@@ -19,20 +18,12 @@ interface Props {
   onOpenSetupGuide: () => void;
 }
 
-interface AuthErrorState {
-  code: string;
-  message: string;
-  title: string;
-  details?: string;
-  actionUrl?: string;
-  actionLabel?: string;
-}
-
 export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
   const { loginWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<AuthErrorState | null>(null);
+  const [error, setError] = useState<{ code: string; message: string } | null>(null);
 
+  // Directly attempt Firebase authentication with popup and fallback to redirect
   const handleGoogleSignIn = async (useRedirect = false) => {
     setError(null);
     setLoading(true);
@@ -40,66 +31,11 @@ export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
       await loginWithGoogle(useRedirect);
     } catch (err: any) {
       console.error('Firebase Auth Error:', err);
-      const code = err?.code || 'auth/unknown';
-      const rawMessage = err?.message || 'Unknown authentication error occurred.';
-      const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
-
-      if (code === 'auth/unauthorized-domain') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Unauthorized Domain (auth/unauthorized-domain)',
-          details: `The domain '${currentHost}' is not authorized in Firebase Console for project '${firebaseConfig.projectId}'. To fix: Go to Firebase Console > Authentication > Settings > Authorized domains and ensure '${currentHost}' (and 'abir-messenger.netlify.app') is added.`,
-          actionUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`,
-          actionLabel: 'Open Firebase Console > Authorized Domains',
-        });
-      } else if (code === 'auth/configuration-not-found') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Authentication Not Initialized (auth/configuration-not-found)',
-          details: `Firebase Authentication has not been enabled for project '${firebaseConfig.projectId}'. In Firebase Console, open Build > Authentication, click 'Get started', and enable Google provider.`,
-          actionUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`,
-          actionLabel: 'Open Firebase Console > Authentication',
-        });
-      } else if (code === 'auth/operation-not-allowed') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Google Provider Disabled (auth/operation-not-allowed)',
-          details: `Google sign-in is disabled in Firebase Console. Go to Authentication > Sign-in method, select Google, and toggle 'Enable'.`,
-          actionUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`,
-          actionLabel: 'Enable Google in Firebase Console',
-        });
-      } else if (code === 'auth/popup-blocked') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Popup Blocked by Browser (auth/popup-blocked)',
-          details: 'Your browser or ad-blocker blocked the Google login popup. Please click "Use Redirect Sign-In" below.',
-        });
-      } else if (code === 'auth/popup-closed-by-user') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Sign-In Cancelled (auth/popup-closed-by-user)',
-          details: 'The sign-in popup window was closed before completing sign-in. Click Continue with Google to try again.',
-        });
-      } else if (code === 'auth/network-request-failed') {
-        setError({
-          code,
-          message: rawMessage,
-          title: 'Network Request Failed (auth/network-request-failed)',
-          details: 'Unable to reach Google/Firebase servers. Please verify your internet connection and try again.',
-        });
-      } else {
-        setError({
-          code,
-          message: rawMessage,
-          title: `Authentication Error (${code})`,
-          details: rawMessage,
-        });
-      }
+      // Display the REAL Firebase error code and message without custom artificial blocks
+      setError({
+        code: err?.code || 'auth/unknown',
+        message: err?.message || 'An error occurred during authentication.',
+      });
     } finally {
       setLoading(false);
     }
@@ -176,40 +112,20 @@ export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
             Sign in securely with your Google account to claim your username and start chatting.
           </p>
 
-          {/* Granular Error Display with exact Firebase error code and message */}
+          {/* Displays REAL Firebase error code and message if authentication fails */}
           {error && (
-            <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 text-left space-y-2.5">
+            <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 text-left space-y-1.5">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
                 <div className="flex-1 min-w-0">
-                  <h5 className="font-bold text-xs text-rose-900 dark:text-rose-200">{error.title}</h5>
-                  <p className="font-mono text-[11px] text-rose-600 dark:text-rose-400 mt-0.5 break-all">
-                    Code: {error.code}
-                  </p>
-                  {error.details && (
-                    <p className="mt-1 leading-relaxed text-gray-700 dark:text-gray-300">
-                      {error.details}
-                    </p>
-                  )}
-                  <p className="mt-1 font-mono text-[10px] text-gray-500 dark:text-gray-400 break-all bg-white/50 dark:bg-black/30 p-1.5 rounded">
-                    Raw error: {error.message}
+                  <h5 className="font-bold text-xs text-rose-900 dark:text-rose-200">
+                    Firebase Error: <span className="font-mono">{error.code}</span>
+                  </h5>
+                  <p className="mt-1 leading-relaxed break-words text-gray-700 dark:text-gray-300 font-mono text-[11px] bg-white/60 dark:bg-black/40 p-2 rounded-lg">
+                    {error.message}
                   </p>
                 </div>
               </div>
-
-              {error.actionUrl && (
-                <div className="pt-1 pl-6">
-                  <a
-                    href={error.actionUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400 underline hover:no-underline"
-                  >
-                    <span>{error.actionLabel}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
             </div>
           )}
 
@@ -244,58 +160,52 @@ export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
             <span>{loading ? 'Signing In...' : 'Continue with Google'}</span>
           </button>
 
-          {/* Fallback Redirect Button for restrictive popups / mobile webviews */}
+          {/* Fallback Redirect Option if browser blocks popups */}
           <div className="mt-3">
             <button
               onClick={() => handleGoogleSignIn(true)}
               disabled={loading}
               className="text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium inline-flex items-center gap-1 transition cursor-pointer"
             >
-              <span>Having popup trouble? Use Redirect Sign-In</span>
+              <span>Popup not opening? Use Redirect Sign-In</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
 
-          {/* Small Firebase Auth Diagnostic Section */}
-          <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 text-left">
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700/60 font-mono text-[11px] space-y-1.5">
-              <div className="flex items-center justify-between font-bold text-gray-500 uppercase tracking-wider text-[10px] mb-1">
-                <span className="flex items-center gap-1.5">
-                  <Terminal className="w-3 h-3 text-blue-500" />
-                  Firebase Auth Diagnostics
-                </span>
-                {import.meta.env.DEV && (
-                  <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-sans text-[10px]">
+          {/* Development-only Firebase Diagnostic Section */}
+          {import.meta.env.DEV && (
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 text-left">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700/60 font-mono text-[11px] space-y-1.5">
+                <div className="flex items-center justify-between font-bold text-gray-500 uppercase tracking-wider text-[10px] mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <Terminal className="w-3 h-3 text-blue-500" />
+                    Firebase Diagnostic (Dev Only)
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-sans text-[10px]">
                     DEV
                   </span>
-                )}
-              </div>
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                <span className="text-gray-400">window.location.hostname:</span>
-                <span className="font-semibold text-blue-600 dark:text-blue-400 break-all ml-1">
-                  {typeof window !== 'undefined' ? window.location.hostname : 'unknown'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                <span className="text-gray-400">firebaseConfig.projectId:</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400 break-all ml-1">
-                  {firebaseConfig.projectId}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                <span className="text-gray-400">firebaseConfig.authDomain:</span>
-                <span className="font-semibold text-purple-600 dark:text-purple-400 break-all ml-1">
-                  {firebaseConfig.authDomain}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                <span className="text-gray-400">auth.currentUser?.uid:</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-200 break-all ml-1">
-                  {auth.currentUser?.uid || 'null (not signed in)'}
-                </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                  <span className="text-gray-400">hostname:</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400 break-all ml-1">
+                    {typeof window !== 'undefined' ? window.location.hostname : 'unknown'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                  <span className="text-gray-400">projectId:</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 break-all ml-1">
+                    {firebaseConfig.projectId}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                  <span className="text-gray-400">authDomain:</span>
+                  <span className="font-semibold text-purple-600 dark:text-purple-400 break-all ml-1">
+                    {firebaseConfig.authDomain}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
 
