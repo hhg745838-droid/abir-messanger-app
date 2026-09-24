@@ -23,6 +23,18 @@ export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
 
+  // In development, log the diagnostic configuration on mount
+  React.useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('[Firebase Auth Diagnostic]', {
+        hostname: typeof window !== 'undefined' ? window.location.hostname : 'unknown',
+        projectId: firebaseConfig.projectId,
+        authDomain: firebaseConfig.authDomain,
+        apiKey: firebaseConfig.apiKey,
+      });
+    }
+  }, []);
+
   // Directly attempt Firebase authentication with popup and fallback to redirect
   const handleGoogleSignIn = async (useRedirect = false) => {
     setError(null);
@@ -201,6 +213,12 @@ export const LoginScreen: React.FC<Props> = ({ onOpenSetupGuide }) => {
                   <span className="text-gray-400">authDomain:</span>
                   <span className="font-semibold text-purple-600 dark:text-purple-400 break-all ml-1">
                     {firebaseConfig.authDomain}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                  <span className="text-gray-400">apiKey:</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400 break-all ml-1">
+                    {firebaseConfig.apiKey}
                   </span>
                 </div>
               </div>
